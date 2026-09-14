@@ -1,2 +1,5 @@
 -r requirements.txt
 pytest>=8,<9
+# Starlette/FastAPI 的 TestClient 自 Starlette 0.48 起改用 httpx2；
+# 收集 tests/test_api.py 必须显式声明，不能依赖旧 httpx 的回退路径。
+httpx2>=2.13,<3
