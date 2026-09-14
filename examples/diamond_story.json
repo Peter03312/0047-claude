@@ -1,0 +1,28 @@
+{
+  "entry": "start",
+  "scenes": [
+    {
+      "id": "start",
+      "adds": ["晓雯知道秘密"],
+      "choices": [
+        {"target": "tian_tai", "label": "和晓雯去天台"},
+        {"target": "zou_lang", "label": "独自走走廊"}
+      ]
+    },
+    {
+      "id": "tian_tai",
+      "choices": [{"target": "he_liu", "label": "下楼汇合"}]
+    },
+    {
+      "id": "zou_lang",
+      "removes": ["晓雯知道秘密"],
+      "choices": [{"target": "he_liu", "label": "下楼汇合"}]
+    },
+    {
+      "id": "he_liu",
+      "requires": ["晓雯知道秘密"],
+      "choices": [{"target": "jie_wei", "label": "继续"}]
+    },
+    {"id": "jie_wei"}
+  ]
+}

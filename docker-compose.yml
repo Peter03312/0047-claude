@@ -1,0 +1,29 @@
+services:
+  api:
+    build: .
+    image: knowledge-continuity:latest
+    # 唯一长驻服务：宿主端口由 API_PORT 决定，容器内固定 8000。
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status == 200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    restart: unless-stopped
+
+  verify:
+    image: knowledge-continuity:latest
+    build: .
+    # 一次运行即退出：先跑 pytest，再对长驻 api 做 HTTP 冒烟。
+    command: >
+      sh -c "python -m pytest -q &&
+             python scripts/smoke.py"
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles: ["verify"]
+    restart: "no"
