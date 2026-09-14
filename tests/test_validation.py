@@ -25,6 +25,41 @@ def test_cycle_is_rejected_with_cycle_path(make_scene, make_graph):
     assert set(cycle) == {"a", "b", "c"}
 
 
+def test_cycle_path_follows_actual_edges_in_order(make_scene, make_graph):
+    # 回归：环路线曾被错误反转，报告里出现图中不存在的边（如 a -> c）。
+    edges = {("a", "b"), ("b", "c"), ("c", "a")}
+    scenes = [
+        make_scene("a", targets=["b"]),
+        make_scene("b", targets=["c"]),
+        make_scene("c", targets=["a"]),
+    ]
+    with pytest.raises(GraphValidationError) as exc_info:
+        analyze_graph(make_graph("a", scenes))
+    cycle = exc_info.value.issues[0]["cycle"]
+
+    # 报告必须能照着走：每一对相邻场景之间都真实存在一条边。
+    for prev, nxt in zip(cycle, cycle[1:]):
+        assert (prev, nxt) in edges, f"环路线包含不存在的边：{prev} -> {nxt}"
+    assert cycle == ["a", "b", "c", "a"]
+
+
+def test_cycle_with_tail_path_starts_at_cycle_entry(make_scene, make_graph):
+    # 入口先走一段无环尾巴 t -> a，再进入 a -> b -> a；
+    # 报告应从环本身开始（a），且方向与边一致。
+    edges = {("t", "a"), ("a", "b"), ("b", "a")}
+    scenes = [
+        make_scene("t", targets=["a"]),
+        make_scene("a", targets=["b"]),
+        make_scene("b", targets=["a"]),
+    ]
+    with pytest.raises(GraphValidationError) as exc_info:
+        analyze_graph(make_graph("t", scenes))
+    cycle = exc_info.value.issues[0]["cycle"]
+    assert cycle == ["a", "b", "a"]
+    for prev, nxt in zip(cycle, cycle[1:]):
+        assert (prev, nxt) in edges
+
+
 def test_self_loop_is_rejected(make_scene, make_graph):
     with pytest.raises(GraphValidationError) as exc_info:
         analyze_graph(make_graph("a", [make_scene("a", targets=["a"])]))

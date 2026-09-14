@@ -36,13 +36,15 @@ def _find_cycle(
                 stack.pop()
                 continue
             if color[nxt] == GRAY:
-                # nxt 是当前路径上的祖先：回溯出环 nxt -> ... -> nxt
+                # nxt 是当前路径上的祖先，环的方向必须与边一致，
+                # 即 nxt 沿当前 DFS 路径下行再经当前边回到 nxt：
+                # on_path[i+1:] 已是“环首之后 -> 当前 DFS 节点”的正向
+                # 顺序，绝不能反转（否则会拼出图中不存在的边）。
                 cycle = [nxt]
-                # on_path 从底向上找 nxt
                 i = len(on_path) - 1
                 while on_path[i] != nxt:
                     i -= 1
-                cycle.extend(reversed(on_path[i + 1 :]))
+                cycle.extend(on_path[i + 1 :])
                 cycle.append(nxt)
                 return cycle
             if color[nxt] == WHITE:
