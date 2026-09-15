@@ -134,7 +134,11 @@ def validate_structure(graph: StoryGraph) -> tuple[dict[str, int], dict[str, lis
 
 
 def reachable_scenes(entry: str, outgoing: dict[str, list[str]]) -> set[str]:
-    """从入口沿边可达的场景集合（分析只处理这个集合内的场景）。"""
+    """结构可达集合：沿所有边（忽略 ``available_when``）从入口可达的场景。
+
+    这是第一层可达性，用于限定拓扑序与传播的分析范围；条件边是否真正
+    可走由 ``propagation.propagate_states`` 按真实事实状态再判定。
+    """
     seen = {entry}
     queue = deque([entry])
     while queue:

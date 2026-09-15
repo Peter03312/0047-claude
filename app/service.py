@@ -1,4 +1,13 @@
-"""分析编排：结构校验 -> 可达性 -> must-facts 传播 -> 反例回溯。
+"""分析编排：结构校验 -> 可达性 -> 状态空间传播 -> 反例回溯。
+
+可达性分两层：
+
+1. **结构可达**：沿所有边（忽略 ``available_when``）从入口能到达的
+   场景。不可达场景仅列出，不参与判定，拓扑序也只在这层上求。
+2. **条件可达**：在结构可达子图内，按读者真实持有的事实状态推进，
+   只有开放边（出发场景“先 removes 后 adds”更新后条件事实全部成立）
+   能送达状态。若一个场景的所有入边都因条件不满足而封闭，它连同其
+   无法另路抵达的下游一起进入不可达清单，且**不产生 requires 违规**。
 
 报告字段全部可定位到场景、事实和具体反例路线；集合一律排序、
 场景与要求保持输入顺序，保证同一输入永远得到同一输出。
@@ -11,7 +20,7 @@ from .graph import (
     validate_structure,
 )
 from .models import StoryGraph
-from .propagation import missing_requirements, propagate_must_facts
+from .propagation import missing_requirements, propagate_states
 
 
 def analyze_graph(graph: StoryGraph) -> dict:
@@ -19,20 +28,24 @@ def analyze_graph(graph: StoryGraph) -> dict:
     index_of, outgoing = validate_structure(graph)
     scenes_by_id = {scene.id: scene for scene in graph.scenes}
 
-    # 2) 只分析入口可达场景；不可达场景仅列出，不参与判定。
-    reachable = reachable_scenes(graph.entry, outgoing)
-    reachable_in_input_order = [
-        scene.id for scene in graph.scenes if scene.id in reachable
+    # 2) 结构可达子图（忽略边条件）：拓扑序只在这层上求。
+    structural_reachable = reachable_scenes(graph.entry, outgoing)
+    structural_in_input_order = [
+        scene.id
+        for scene in graph.scenes
+        if scene.id in structural_reachable
     ]
+    order, _incoming = topo_order(structural_in_input_order, outgoing)
+
+    # 3) 在 DAG 内按真实到达事实状态推进、合并等价状态：
+    #    只走当时开放的选择，据此确定真正可达场景与进入时保证事实。
+    arriving_states, guaranteed_in, guaranteed_out = propagate_states(
+        graph.entry, order, scenes_by_id
+    )
+    reachable = set(arriving_states)
     unreachable = [
         scene.id for scene in graph.scenes if scene.id not in reachable
     ]
-
-    # 3) 拓扑序 + must-facts 数据流（多前驱取交集，禁止并集放行）。
-    order, incoming = topo_order(reachable_in_input_order, outgoing)
-    guaranteed_in, guaranteed_out = propagate_must_facts(
-        graph.entry, order, incoming, scenes_by_id
-    )
 
     scene_reports: list[dict] = []
     violations: list[dict] = []
@@ -40,6 +53,8 @@ def analyze_graph(graph: StoryGraph) -> dict:
     # 场景按投稿（输入）顺序汇报，方便小作者对照原稿。
     for scene in graph.scenes:
         if scene.id not in reachable:
+            # 结构上孤立，或所有入边都被 available_when 封闭：
+            # 只列出，不判定 requires。
             scene_reports.append({"id": scene.id, "reachable": False})
             continue
 
@@ -63,7 +78,6 @@ def analyze_graph(graph: StoryGraph) -> dict:
                     counterexample = shortest_counterexample(
                         graph.entry,
                         scenes_by_id,
-                        outgoing,
                         scene.id,
                         fact,
                     )

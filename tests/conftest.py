@@ -8,13 +8,32 @@ from app.service import analyze_graph
 
 @pytest.fixture
 def make_scene():
-    def _make(sid, adds=(), removes=(), requires=(), targets=()):
+    def _make(
+        sid,
+        adds=(),
+        removes=(),
+        requires=(),
+        targets=(),
+        edge_when=None,
+    ):
+        """搭一个场景。
+
+        ``targets`` 仍是目标 id 列表（边序）；``edge_when`` 可选，形如
+        ``{边下标: [条件事实, ...]}``，给指定选择挂 ``available_when``。
+        """
+        edge_when = edge_when or {}
         return Scene(
             id=sid,
             adds=list(adds),
             removes=list(removes),
             requires=list(requires),
-            choices=[Choice(target=t) for t in targets],
+            choices=[
+                Choice(
+                    target=t,
+                    available_when=list(edge_when.get(i, ())),
+                )
+                for i, t in enumerate(targets)
+            ],
         )
 
     return _make
